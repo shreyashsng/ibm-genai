@@ -3,24 +3,29 @@ import streamlit as st
 import random
 import re
 
-# Try to import NLTK, but make it optional
+# Import NLTK
 try:
     import nltk
     from nltk.tokenize import word_tokenize
     from nltk.corpus import stopwords
     NLTK_AVAILABLE = True
-except ImportError:
-    NLTK_AVAILABLE = False
-    st.warning("NLTK not available. Using basic text processing.")
-
-# Download NLTK data if available
-if NLTK_AVAILABLE:
+    
+    # Download NLTK data with better error handling
     try:
-        nltk.download('punkt', quiet=True)
+        # Try downloading the newer punkt_tab first
         nltk.download('punkt_tab', quiet=True)
         nltk.download('stopwords', quiet=True)
     except:
-        NLTK_AVAILABLE = False
+        try:
+            # Fallback to older punkt if punkt_tab fails
+            nltk.download('punkt', quiet=True)
+            nltk.download('stopwords', quiet=True)
+        except:
+            # If downloads fail, we'll use basic processing
+            pass
+            
+except ImportError:
+    NLTK_AVAILABLE = False
 
 # Cache the model loading for better performance
 @st.cache_resource
@@ -141,24 +146,27 @@ def suggest_hashtags(keywords, platform):
     Suggest relevant hashtags based on keywords and platform.
     """
     # Define stop words
+    stop_words = set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should'])
+    
     if NLTK_AVAILABLE:
         try:
-            stop_words = set(stopwords.words('english'))
+            nltk_stop_words = set(stopwords.words('english'))
+            stop_words.update(nltk_stop_words)
         except:
-            stop_words = set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'])
-    else:
-        stop_words = set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'])
+            pass  # Use our basic stop words
     
-    # Extract hashtags from keywords
+    # Extract hashtags from keywords - try NLTK first, then fallback
+    tokens = []
     if NLTK_AVAILABLE:
         try:
             tokens = word_tokenize(keywords.lower())
-        except:
-            # Fallback: simple word splitting
+        except Exception as e:
+            # If NLTK tokenization fails (like punkt_tab error), use regex
             tokens = re.findall(r'\b[a-zA-Z]+\b', keywords.lower())
-    else:
-        # Simple word splitting when NLTK is not available
-        tokens = re.findall(r'\b[a-zA-Z]+\b', keywords.lower())
+    
+    # If no tokens found, use simple split as final fallback
+    if not tokens:
+        tokens = [word.strip() for word in keywords.lower().split() if word.strip().isalpha()]
     
     hashtags = []
     
