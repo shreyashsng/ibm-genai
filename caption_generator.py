@@ -1,17 +1,26 @@
 from transformers import pipeline
 import streamlit as st
 import random
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
 import re
 
-# Download NLTK data
+# Try to import NLTK, but make it optional
 try:
-    nltk.download('punkt', quiet=True)
-    nltk.download('stopwords', quiet=True)
-except:
-    pass
+    import nltk
+    from nltk.tokenize import word_tokenize
+    from nltk.corpus import stopwords
+    NLTK_AVAILABLE = True
+except ImportError:
+    NLTK_AVAILABLE = False
+    st.warning("NLTK not available. Using basic text processing.")
+
+# Download NLTK data if available
+if NLTK_AVAILABLE:
+    try:
+        nltk.download('punkt', quiet=True)
+        nltk.download('punkt_tab', quiet=True)
+        nltk.download('stopwords', quiet=True)
+    except:
+        NLTK_AVAILABLE = False
 
 # Cache the model loading for better performance
 @st.cache_resource
@@ -131,13 +140,26 @@ def suggest_hashtags(keywords, platform):
     """
     Suggest relevant hashtags based on keywords and platform.
     """
-    try:
-        stop_words = set(stopwords.words('english'))
-    except:
+    # Define stop words
+    if NLTK_AVAILABLE:
+        try:
+            stop_words = set(stopwords.words('english'))
+        except:
+            stop_words = set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'])
+    else:
         stop_words = set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'])
     
     # Extract hashtags from keywords
-    tokens = word_tokenize(keywords.lower())
+    if NLTK_AVAILABLE:
+        try:
+            tokens = word_tokenize(keywords.lower())
+        except:
+            # Fallback: simple word splitting
+            tokens = re.findall(r'\b[a-zA-Z]+\b', keywords.lower())
+    else:
+        # Simple word splitting when NLTK is not available
+        tokens = re.findall(r'\b[a-zA-Z]+\b', keywords.lower())
+    
     hashtags = []
     
     for token in tokens:
