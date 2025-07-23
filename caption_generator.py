@@ -56,13 +56,13 @@ PLATFORM_EMOJIS = {
     "Facebook": ["❤️", "😊", "🎉", "👨‍👩‍👧‍👦", "🏠", "🌟", "💖", "😍", "🤗", "🎈", "🌸", "☀️"]
 }
 
-# Enhanced tone-specific prompt templates
+# Enhanced tone-specific prompt templates - more specific and constrained
 TONE_TEMPLATES = {
-    "Casual": "Write a relaxed, friendly social media caption about {keywords}:",
-    "Professional": "Write a polished, business-appropriate caption about {keywords}:",
-    "Inspirational": "Write an uplifting, motivational caption about {keywords}:",
-    "Humorous": "Write a witty, entertaining caption about {keywords}:",
-    "Educational": "Write an informative, educational caption about {keywords}:"
+    "Casual": "Create a short, casual social media post about {keywords}. Keep it under 2 sentences:",
+    "Professional": "Write a professional social media post about {keywords}. Be concise and valuable:",
+    "Inspirational": "Create an inspiring short post about {keywords}. Make it motivational:",
+    "Humorous": "Write a funny, short social media post about {keywords}. Keep it witty:",
+    "Educational": "Share a quick tip or fact about {keywords}. Be informative but brief:"
 }
 
 # Call-to-action templates by platform
@@ -75,15 +75,38 @@ CTA_TEMPLATES = {
 
 def generate_fallback_caption(keywords, platform, tone, include_cta=True):
     """Generate a simple caption when AI model is not available"""
+    import random
+    
     templates = {
-        "Casual": f"Just had an amazing experience with {keywords}! ✨",
-        "Professional": f"Exploring new opportunities in {keywords}. Key insights ahead.",
-        "Inspirational": f"Every journey with {keywords} teaches us something valuable. Keep growing! 🌟",
-        "Humorous": f"When life gives you {keywords}, make it memorable! 😄",
-        "Educational": f"Here's what I learned about {keywords} today..."
+        "Casual": [
+            f"Just had an amazing experience with {keywords}! ✨",
+            f"Loving this {keywords} moment! 💕",
+            f"{keywords} vibes are everything right now! 🙌"
+        ],
+        "Professional": [
+            f"Exploring new opportunities in {keywords}. Key insights ahead.",
+            f"Sharing valuable insights about {keywords}.",
+            f"Professional growth through {keywords} experiences."
+        ],
+        "Inspirational": [
+            f"Every journey with {keywords} teaches us something valuable. Keep growing! 🌟",
+            f"{keywords} reminds us that growth happens outside our comfort zone! 💪",
+            f"Embracing the {keywords} journey with gratitude and purpose! ✨"
+        ],
+        "Humorous": [
+            f"When life gives you {keywords}, make it memorable! 😄",
+            f"Plot twist: {keywords} just made my day! 😂",
+            f"Me trying to adult but {keywords} happened instead! 🤷‍♀️"
+        ],
+        "Educational": [
+            f"Here's what I learned about {keywords} today...",
+            f"Quick tip: {keywords} can be game-changing when done right!",
+            f"Did you know? {keywords} has some fascinating aspects!"
+        ]
     }
     
-    caption = templates.get(tone, f"Sharing my thoughts on {keywords}.")
+    template_list = templates.get(tone, [f"Sharing my thoughts on {keywords}."])
+    caption = random.choice(template_list)
     
     if include_cta and platform in CTA_TEMPLATES:
         cta = random.choice(CTA_TEMPLATES[platform])
@@ -101,22 +124,38 @@ def generate_caption(keywords, platform, tone, include_cta=True):
     
     # Create prompt
     prompt = TONE_TEMPLATES[tone].format(keywords=keywords)
-    max_length = min(80, PLATFORM_LENGTHS[platform] // 8)  # Conservative approach
+    # Much shorter max length to prevent rambling
+    max_length = min(50, len(prompt.split()) + 25)  # Prompt + ~25 words max
     
     try:
-        # Generate text
+        # Generate text with more controlled parameters
         result = generator(
             prompt, 
             max_length=max_length, 
             num_return_sequences=1, 
             truncation=True,
             do_sample=True,
-            temperature=0.8,
+            temperature=0.7,  # Lower temperature for more focused output
+            top_p=0.9,  # Nucleus sampling for better quality
+            repetition_penalty=1.1,  # Avoid repetition
             pad_token_id=generator.tokenizer.eos_token_id
         )[0]['generated_text']
         
-        # Clean the caption
+        # Clean the caption more aggressively
         caption = result.replace(prompt, "").strip()
+        
+        # Remove any text after common ending patterns that indicate rambling
+        end_patterns = [
+            r'\. [A-Z].*',  # Remove anything after first sentence ending
+            r'\? [A-Z].*',  # Remove anything after question
+            r'! [A-Z].*',   # Remove anything after exclamation
+        ]
+        
+        for pattern in end_patterns:
+            match = re.search(pattern, caption)
+            if match:
+                caption = caption[:match.start() + 1]
+                break
         
         # Remove incomplete sentences at the end
         sentences = re.split(r'[.!?]+', caption)
@@ -125,14 +164,25 @@ def generate_caption(keywords, platform, tone, include_cta=True):
         elif not caption.endswith(('.', '!', '?')):
             caption = caption.rstrip() + '.'
         
-        # Ensure it's not too long for the platform
-        if len(caption) > PLATFORM_LENGTHS[platform] - 100:  # Leave room for hashtags
-            caption = caption[:PLATFORM_LENGTHS[platform] - 100].rsplit(' ', 1)[0] + '.'
+        # Aggressive length limiting - if too long, use first sentence only
+        max_reasonable_length = 300  # Much shorter than platform limits
+        if len(caption) > max_reasonable_length:
+            # Find first sentence ending
+            first_sentence_end = min(
+                caption.find('.') if caption.find('.') != -1 else len(caption),
+                caption.find('!') if caption.find('!') != -1 else len(caption),
+                caption.find('?') if caption.find('?') != -1 else len(caption)
+            )
+            if first_sentence_end < len(caption):
+                caption = caption[:first_sentence_end + 1]
+            else:
+                # If no sentence ending found, truncate and add period
+                caption = caption[:max_reasonable_length].rsplit(' ', 1)[0] + '.'
         
         # Add call-to-action if requested
         if include_cta and platform in CTA_TEMPLATES:
             cta = random.choice(CTA_TEMPLATES[platform])
-            if len(caption + " " + cta) <= PLATFORM_LENGTHS[platform] - 50:  # Leave room for hashtags
+            if len(caption + " " + cta) <= max_reasonable_length:
                 caption += " " + cta
         
         return caption
