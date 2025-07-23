@@ -1,0 +1,38 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+
+# Streamlit and other config
+.streamlit/config.toml
+
+# Jupyter and notebook checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Environment files
+.env
+*.env
+
+# Model and data files
+*.safetensors
+*.h5
+*.ckpt
+*.pth
+*.pt
+
+# Log files
+*.log
+
+# Ignore all hidden files except .gitignore
+.*
+!.gitignore
