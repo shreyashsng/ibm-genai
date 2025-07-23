@@ -18,9 +18,12 @@ except:
 def load_model():
     """Load and cache the text generation model"""
     try:
-        return pipeline('text-generation', model='gpt2', device=-1)  # Use CPU for consistency
+        import os
+        # Set environment variables for better compatibility
+        os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+        return pipeline('text-generation', model='gpt2', device=-1, torch_dtype='auto')
     except Exception as e:
-        st.error(f"Error loading model: {e}")
+        st.warning(f"Could not load AI model: {e}. Using fallback text generation.")
         return None
 
 # Platform-specific caption length limits
@@ -56,13 +59,31 @@ CTA_TEMPLATES = {
     "Facebook": ["Like if you agree! 👍", "Share with your friends! 📤", "What do you think? Comment below! 💬", "Tag someone who would love this! 🏷️"]
 }
 
+def generate_fallback_caption(keywords, platform, tone, include_cta=True):
+    """Generate a simple caption when AI model is not available"""
+    templates = {
+        "Casual": f"Just had an amazing experience with {keywords}! ✨",
+        "Professional": f"Exploring new opportunities in {keywords}. Key insights ahead.",
+        "Inspirational": f"Every journey with {keywords} teaches us something valuable. Keep growing! 🌟",
+        "Humorous": f"When life gives you {keywords}, make it memorable! 😄",
+        "Educational": f"Here's what I learned about {keywords} today..."
+    }
+    
+    caption = templates.get(tone, f"Sharing my thoughts on {keywords}.")
+    
+    if include_cta and platform in CTA_TEMPLATES:
+        cta = random.choice(CTA_TEMPLATES[platform])
+        caption += " " + cta
+    
+    return caption
+
 def generate_caption(keywords, platform, tone, include_cta=True):
     """
     Generate a social media caption based on keywords, platform, and tone.
     """
     generator = load_model()
     if not generator:
-        return "Error: Could not load AI model. Please try again."
+        return generate_fallback_caption(keywords, platform, tone, include_cta)
     
     # Create prompt
     prompt = TONE_TEMPLATES[tone].format(keywords=keywords)
@@ -103,7 +124,8 @@ def generate_caption(keywords, platform, tone, include_cta=True):
         return caption
         
     except Exception as e:
-        return f"Error generating caption: {str(e)}. Please try with different keywords."
+        st.warning(f"AI generation failed: {str(e)}. Using fallback method.")
+        return generate_fallback_caption(keywords, platform, tone, include_cta)
 
 def suggest_hashtags(keywords, platform):
     """
